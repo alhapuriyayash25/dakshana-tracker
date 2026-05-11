@@ -154,6 +154,7 @@ export default function App() {
   const [adminEditPin, setAdminEditPin] = useState("");
   const [adminExpandTopic, setAdminExpandTopic] = useState(null);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState(null);
+  const [dbLoading, setDbLoading] = useState(true);
 
   useEffect(()=>{
     loadData();
@@ -169,6 +170,7 @@ export default function App() {
     onValue(usersRef, (snapshot) => {
       const data = snapshot.val();
       if(data) setUsers(data);
+      setDbLoading(false);
     });
   };
 
@@ -225,6 +227,7 @@ export default function App() {
 
   const handleLogin = async () => {
     setAuthError("");
+    if(dbLoading) return setAuthError("Thoda ruko... data load ho raha hai ⏳");
     const key = loginUsername.trim().toLowerCase();
     if(!users[key]) return setAuthError("Ye farzi naam nahi mila 🤔");
     if(users[key].pin!==loginPin) return setAuthError("PIN galat hai");
