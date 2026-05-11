@@ -1,4 +1,19 @@
 import { useState, useEffect } from "react";
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, set, onValue } from "firebase/database";
+
+const firebaseConfig = {
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.REACT_APP_FIREBASE_DATABASE_URL,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getDatabase(firebaseApp);
 
 const GROUP_CODE = "DAKSHANA2025";
 const ADMIN_CODE = "1979";
@@ -150,15 +165,16 @@ export default function App() {
   };
 
   const loadData = () => {
-    try {
-      const r = localStorage.getItem("ds_users");
-      if(r) setUsers(JSON.parse(r));
-    } catch(e){}
+    const usersRef = ref(db, "ds_users");
+    onValue(usersRef, (snapshot) => {
+      const data = snapshot.val();
+      if(data) setUsers(data);
+    });
   };
 
-  const saveUsers = (u) => {
+  const saveUsers = async (u) => {
     setUsers(u);
-    try { localStorage.setItem("ds_users", JSON.stringify(u)); } catch(e){}
+    try { await set(ref(db, "ds_users"), u); } catch(e){ console.error("Firebase save error:", e); }
   };
 
   const getSolvedCount = (u) => Object.keys(u.solved||{}).length;
