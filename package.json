@@ -2,8 +2,9 @@
   "name": "dakshana-tracker",
   "version": "1.0.0",
   "private": true,
-  "description": "DSA Progress Tracker for Dakshana Sophomores — built on Striver's A2Z Sheet",
+  "description": "DSA Progress Tracker for Dakshana Sophomores",
   "dependencies": {
+    "firebase": "^10.12.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-scripts": "5.0.1"
