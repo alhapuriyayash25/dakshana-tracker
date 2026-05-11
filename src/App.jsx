@@ -149,16 +149,16 @@ export default function App() {
     setTimeout(()=>setToast(null),2500);
   };
 
-  const loadData = async () => {
+  const loadData = () => {
     try {
-      const r = await window.storage.get("ds_users", true);
-      if(r) setUsers(JSON.parse(r.value));
+      const r = localStorage.getItem("ds_users");
+      if(r) setUsers(JSON.parse(r));
     } catch(e){}
   };
 
-  const saveUsers = async (u) => {
+  const saveUsers = (u) => {
     setUsers(u);
-    try { await window.storage.set("ds_users", JSON.stringify(u), true); } catch(e){}
+    try { localStorage.setItem("ds_users", JSON.stringify(u)); } catch(e){}
   };
 
   const getSolvedCount = (u) => Object.keys(u.solved||{}).length;
