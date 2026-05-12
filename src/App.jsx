@@ -166,7 +166,19 @@ export default function App() {
   const [dbLoading, setDbLoading] = useState(true);
   const [lbTab, setLbTab] = useState("overall"); // "overall" | "weekly"
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // Restore session after Firebase data loads
+  useEffect(() => {
+    if(dbLoading) return;
+    const savedKey = localStorage.getItem("ds_current_user");
+    if(savedKey && users[savedKey] && !currentUser) {
+      setCurrentUser(users[savedKey]);
+      setPage("app");
+    }
+  }, [dbLoading, users]);
 
   const showToast = (msg, type="success") => {
     setToast({msg, type});
@@ -280,6 +292,7 @@ export default function App() {
     const newUsers = {...users, [farziKey]:{name:regName.trim(),username:farziKey,pin:regPin,isAdmin:isAdminReg,hidden:isAdminReg,solved:{},activity:[],joinedAt:new Date().toISOString()}};
     await saveUsers(newUsers);
     setCurrentUser(newUsers[farziKey]);
+    localStorage.setItem("ds_current_user", farziKey);
     setPage("app");
     showToast(isAdminReg ? "Admin access granted 🔐" : "Welcome to Dakshana Sophomores! 🎉");
   };
@@ -291,6 +304,7 @@ export default function App() {
     if(!users[key]) return setAuthError("Ye farzi naam nahi mila 🤔");
     if(users[key].pin!==loginPin) return setAuthError("PIN galat hai");
     setCurrentUser(users[key]);
+    localStorage.setItem("ds_current_user", key);
     setPage("app");
   };
 
@@ -526,7 +540,7 @@ export default function App() {
         </div>
         <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
           <div style={{background:"rgba(99,102,241,0.15)",borderRadius:"20px",padding:"4px 12px",fontSize:"12px",color:"#818cf8",fontWeight:600}}>#{myRank} rank</div>
-          <button onClick={()=>{setCurrentUser(null);setPage("home");}} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",padding:"6px 12px",color:"#64748b",fontSize:"12px",cursor:"pointer"}}>Logout</button>
+          <button onClick={()=>{setCurrentUser(null);localStorage.removeItem("ds_current_user");setPage("home");}} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",padding:"6px 12px",color:"#64748b",fontSize:"12px",cursor:"pointer"}}>Logout</button>
         </div>
       </div>
 
@@ -972,7 +986,7 @@ export default function App() {
             <div style={{background:"rgba(239,68,68,0.05)",border:"1px solid rgba(239,68,68,0.15)",borderRadius:"16px",padding:"14px 16px"}}>
               <div style={{color:"#ef4444",fontWeight:600,fontSize:"13px",marginBottom:"4px"}}>Logout</div>
               <div style={{color:"#64748b",fontSize:"12px",marginBottom:"12px"}}>Apna progress save rahega</div>
-              <button onClick={()=>{setCurrentUser(null);setPage("home");}} style={{padding:"8px 20px",background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:"8px",color:"#ef4444",fontSize:"13px",cursor:"pointer",fontWeight:600}}>Logout karo</button>
+              <button onClick={()=>{setCurrentUser(null);localStorage.removeItem("ds_current_user");setPage("home");}} style={{padding:"8px 20px",background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:"8px",color:"#ef4444",fontSize:"13px",cursor:"pointer",fontWeight:600}}>Logout karo</button>
             </div>
           </div>
         )}
