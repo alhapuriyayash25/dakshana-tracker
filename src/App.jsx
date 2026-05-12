@@ -204,7 +204,6 @@ export default function App() {
   // Weekly points: only problems solved in current week (Mon-Sun)
   const getWeeklyPoints = (u) => {
     const thisWeek = weekStart(todayStr());
-    const activity = u.activity || [];
     const solved = u.solved || {};
     // Get all problem IDs solved this week
     // We track date per activity entry; match solved timestamps to this week
@@ -488,7 +487,6 @@ export default function App() {
   const wlb = getWeeklyLeaderboard();
   const myKey = currentUser.username || currentUser.name.toLowerCase();
   const myRank = lb.findIndex(u=>(u.username||u.name.toLowerCase())===myKey)+1;
-  const myWeeklyRank = wlb.findIndex(u=>(u.username||u.name.toLowerCase())===myKey)+1;
   const myData = lb.find(u=>(u.username||u.name.toLowerCase())===myKey)||{solvedCount:0,points:0,streak:0,pct:0};
   const totalSolved = getSolvedCount(currentUser);
   const myStreak = getStreak(currentUser);
@@ -760,7 +758,6 @@ export default function App() {
                       const thD = getTopicProgress(them, t.id);
                       const iAhead = myD > thD;
                       const theyAhead = thD > myD;
-                      const tied = myD === thD;
                       return (
                         <div key={t.id} style={{marginBottom:"10px",background:"rgba(255,255,255,0.02)",borderRadius:"10px",padding:"8px 10px"}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"5px"}}>
