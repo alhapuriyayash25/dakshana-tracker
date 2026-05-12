@@ -253,6 +253,17 @@ export default function App() {
     (u.activity||[]).forEach(d => { map[d] = (map[d]||0) + 1; });
     return map;
   };
+  // Daily Problem: seed by date so everyone gets same unsolved problem today
+  const getDailyProblem = (u) => {
+    const allProblems = DSA_TOPICS.flatMap(t => t.problems.map(p => ({...p, topicName: t.name})));
+    const unsolved = allProblems.filter(p => !(u.solved?.[p.id]));
+    if(unsolved.length === 0) return null;
+    const dateNum = parseInt(todayStr().replace(/-/g,''));
+    const idx = dateNum % unsolved.length;
+    return unsolved[idx];
+  };
+
+
 
   const handleRegister = async () => {
     setAuthError("");
@@ -537,6 +548,35 @@ export default function App() {
                 </div>
               ))}
             </div>
+
+            {/* Daily Problem */}
+            {(() => {
+              const dp = getDailyProblem(currentUser);
+              if(!dp) return null;
+              const alreadySolved = isSolved(dp.id);
+              return (
+                <div style={{background:alreadySolved?"rgba(34,197,94,0.08)":"linear-gradient(135deg,rgba(99,102,241,0.15),rgba(139,92,246,0.08))",border:`1px solid ${alreadySolved?"rgba(34,197,94,0.3)":"rgba(99,102,241,0.3)"}`,borderRadius:"16px",padding:"1.25rem",marginBottom:"1.5rem"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                      <span style={{fontSize:"18px"}}>🎯</span>
+                      <span style={{color:"#fff",fontWeight:700,fontSize:"14px"}}>Aaj Ka Problem</span>
+                    </div>
+                    <span style={{fontSize:"11px",color:"#475569",background:"rgba(255,255,255,0.05)",padding:"3px 10px",borderRadius:"20px"}}>Daily Challenge</span>
+                  </div>
+                  <div style={{marginBottom:"12px"}}>
+                    <div style={{color:"#fff",fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>{dp.title}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                      <span style={{fontSize:"11px",color:"#64748b"}}>{dp.topicName}</span>
+                      <span style={{fontSize:"10px",fontWeight:700,padding:"2px 8px",borderRadius:"20px",background:DIFF_BG[dp.diff],color:COLORS[dp.diff]}}>{dp.diff}</span>
+                    </div>
+                  </div>
+                  <button onClick={()=>toggleProblem(dp.id)} style={{width:"100%",padding:"10px",background:alreadySolved?"rgba(34,197,94,0.15)":"#6366f1",border:`1px solid ${alreadySolved?"rgba(34,197,94,0.4)":"transparent"}`,borderRadius:"10px",color:alreadySolved?"#22c55e":"#fff",fontSize:"13px",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}>
+                    {alreadySolved ? "✅ Aaj ka problem solve kar liya! 🎉" : "✓ Mark as Solved"}
+                  </button>
+                  {!alreadySolved && <div style={{textAlign:"center",marginTop:"8px",fontSize:"11px",color:"#475569"}}>Kal naya problem aayega 🔄</div>}
+                </div>
+              );
+            })()}
 
             <div style={{background:"#1a1a2e",border:"1px solid rgba(255,255,255,0.07)",borderRadius:"16px",padding:"1.25rem",marginBottom:"1.5rem"}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:"10px"}}>
