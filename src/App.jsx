@@ -110,15 +110,8 @@ const DSA_TOPICS = [
 ];
 
 const TOTAL = DSA_TOPICS.reduce((s,t)=>s+t.problems.length,0);
-
-const COLORS = {
-  easy:"#22c55e", medium:"#f59e0b", hard:"#ef4444"
-};
-
-const DIFF_BG = {
-  easy:"#dcfce7", medium:"#fef3c7", hard:"#fee2e2"
-};
-
+const COLORS = { easy:"#22c55e", medium:"#f59e0b", hard:"#ef4444" };
+const DIFF_BG = { easy:"#dcfce7", medium:"#fef3c7", hard:"#fee2e2" };
 const RANK_LABELS = ["👑 Legend","🔥 Grandmaster","⭐ Expert","💪 Specialist","📚 Pupil","🌱 Newbie"];
 const rankFor = (pct) => {
   if(pct>=90) return RANK_LABELS[0];
@@ -130,6 +123,22 @@ const rankFor = (pct) => {
 };
 
 const todayStr = () => new Date().toISOString().split("T")[0];
+
+// Returns date string N days ago
+const daysAgo = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().split("T")[0];
+};
+
+// Get week start (Monday) of a given date string
+const weekStart = (dateStr) => {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  const diff = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().split("T")[0];
+};
 
 export default function App() {
   const [page, setPage] = useState("home");
@@ -155,14 +164,13 @@ export default function App() {
   const [adminExpandTopic, setAdminExpandTopic] = useState(null);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState(null);
   const [dbLoading, setDbLoading] = useState(true);
+  const [lbTab, setLbTab] = useState("overall"); // "overall" | "weekly"
 
-  useEffect(()=>{
-    loadData();
-  },[]);
+  useEffect(() => { loadData(); }, []);
 
   const showToast = (msg, type="success") => {
-    setToast({msg,type});
-    setTimeout(()=>setToast(null),2500);
+    setToast({msg, type});
+    setTimeout(() => setToast(null), 2500);
   };
 
   const loadData = () => {
@@ -176,15 +184,16 @@ export default function App() {
 
   const saveUsers = async (u) => {
     setUsers(u);
-    try { await set(ref(db, "ds_users"), u); } catch(e){ console.error("Firebase save error:", e); }
+    try { await set(ref(db, "ds_users"), u); } catch(e) { console.error("Firebase save error:", e); }
   };
 
   const getSolvedCount = (u) => Object.keys(u.solved||{}).length;
+
   const getPoints = (u) => {
-    let p=0;
-    Object.keys(u.solved||{}).forEach(id=>{
-      const top = DSA_TOPICS.find(t=>t.problems.find(pr=>pr.id===id));
-      const pr = top?.problems.find(pr=>pr.id===id);
+    let p = 0;
+    Object.keys(u.solved||{}).forEach(id => {
+      const top = DSA_TOPICS.find(t => t.problems.find(pr => pr.id===id));
+      const pr = top?.problems.find(pr => pr.id===id);
       if(pr?.diff==="easy") p+=1;
       else if(pr?.diff==="medium") p+=2;
       else if(pr?.diff==="hard") p+=3;
@@ -192,18 +201,58 @@ export default function App() {
     return p;
   };
 
+  // Weekly points: only problems solved in current week (Mon-Sun)
+  const getWeeklyPoints = (u) => {
+    const thisWeek = weekStart(todayStr());
+    const activity = u.activity || [];
+    const solved = u.solved || {};
+    // Get all problem IDs solved this week
+    // We track date per activity entry; match solved timestamps to this week
+    let pts = 0;
+    Object.entries(solved).forEach(([id, ts]) => {
+      if(!ts) return;
+      const solvedDate = new Date(ts).toISOString().split("T")[0];
+      if(weekStart(solvedDate) === thisWeek) {
+        const top = DSA_TOPICS.find(t => t.problems.find(pr => pr.id===id));
+        const pr = top?.problems.find(pr => pr.id===id);
+        if(pr?.diff==="easy") pts+=1;
+        else if(pr?.diff==="medium") pts+=2;
+        else if(pr?.diff==="hard") pts+=3;
+      }
+    });
+    return pts;
+  };
+
+  const getWeeklySolved = (u) => {
+    const thisWeek = weekStart(todayStr());
+    const solved = u.solved || {};
+    return Object.entries(solved).filter(([id, ts]) => {
+      if(!ts) return false;
+      const solvedDate = new Date(ts).toISOString().split("T")[0];
+      return weekStart(solvedDate) === thisWeek;
+    }).length;
+  };
+
   const getStreak = (u) => {
-    if(!u.activity||!u.activity.length) return 0;
+    if(!u.activity || !u.activity.length) return 0;
     const days = [...new Set(u.activity)].sort().reverse();
-    let streak=0, cur=new Date(todayStr());
-    for(let d of days){
+    let streak = 0;
+    let cur = new Date(todayStr());
+    for(let d of days) {
       const dd = new Date(d);
-      const diff = Math.round((cur-dd)/(1000*60*60*24));
-      if(diff===0||diff===streak){ streak++; cur=dd; }
-      else if(diff===1){ streak++; cur=dd; }
+      const diff = Math.round((cur - dd) / (1000*60*60*24));
+      if(diff === 0 || diff === streak) { streak++; cur = dd; }
+      else if(diff === 1) { streak++; cur = dd; }
       else break;
     }
     return streak;
+  };
+
+  // Returns last 84 days activity map: {dateStr: count}
+  const getActivityMap = (u) => {
+    const map = {};
+    (u.activity||[]).forEach(d => { map[d] = (map[d]||0) + 1; });
+    return map;
   };
 
   const handleRegister = async () => {
@@ -239,13 +288,14 @@ export default function App() {
     const key = currentUser.username || currentUser.name.toLowerCase();
     const solved = {...(users[key].solved||{})};
     const activity = [...(users[key].activity||[])];
-    if(solved[pid]){ delete solved[pid]; }
-    else { solved[pid]=Date.now(); activity.push(todayStr()); }
+    let wasAdded = false;
+    if(solved[pid]) { delete solved[pid]; }
+    else { solved[pid] = Date.now(); activity.push(todayStr()); wasAdded = true; }
     const updated = {...users[key], solved, activity};
-    const newUsers = {...users,[key]:updated};
+    const newUsers = {...users, [key]: updated};
     await saveUsers(newUsers);
     setCurrentUser(updated);
-    showToast(solved[pid]===undefined ? "Problem unmarked" : "Problem solved! 🎉");
+    showToast(wasAdded ? "Problem solved! 🎉" : "Problem unmarked");
   };
 
   const isSolved = (pid) => !!(currentUser?.solved?.[pid]);
@@ -253,17 +303,80 @@ export default function App() {
   const getLeaderboard = () => {
     return Object.values(users).filter(u=>!u.hidden).map(u=>({
       ...u,
-      solved: getSolvedCount(u),
+      solvedCount: getSolvedCount(u),
       points: getPoints(u),
+      weeklyPoints: getWeeklyPoints(u),
+      weeklySolved: getWeeklySolved(u),
       streak: getStreak(u),
       pct: Math.round(getSolvedCount(u)/TOTAL*100)
-    })).sort((a,b)=>b.points-a.points);
+    })).sort((a,b) => b.points - a.points);
+  };
+
+  const getWeeklyLeaderboard = () => {
+    return Object.values(users).filter(u=>!u.hidden).map(u=>({
+      ...u,
+      solvedCount: getSolvedCount(u),
+      points: getPoints(u),
+      weeklyPoints: getWeeklyPoints(u),
+      weeklySolved: getWeeklySolved(u),
+      streak: getStreak(u),
+      pct: Math.round(getSolvedCount(u)/TOTAL*100)
+    })).sort((a,b) => b.weeklyPoints - a.weeklyPoints);
   };
 
   const getTopicProgress = (u, tid) => {
-    const topic = DSA_TOPICS.find(t=>t.id===tid);
+    const topic = DSA_TOPICS.find(t => t.id===tid);
     if(!topic) return 0;
-    return topic.problems.filter(p=>u.solved?.[p.id]).length;
+    return topic.problems.filter(p => u.solved?.[p.id]).length;
+  };
+
+  // Heatmap: last 84 days (12 weeks)
+  const HeatMap = ({ u }) => {
+    const actMap = getActivityMap(u);
+    const days = [];
+    for(let i=83; i>=0; i--) days.push(daysAgo(i));
+    const maxCount = Math.max(1, ...Object.values(actMap));
+    const today = todayStr();
+    const streak = getStreak(u);
+
+    const getColor = (d) => {
+      const count = actMap[d] || 0;
+      if(count === 0) return "rgba(255,255,255,0.05)";
+      const intensity = count / maxCount;
+      if(intensity < 0.3) return "rgba(99,102,241,0.3)";
+      if(intensity < 0.6) return "rgba(99,102,241,0.6)";
+      return "#6366f1";
+    };
+
+    // Group into weeks
+    const weeks = [];
+    for(let i=0; i<days.length; i+=7) weeks.push(days.slice(i,i+7));
+
+    return (
+      <div style={{background:"#1a1a2e",border:"1px solid rgba(255,255,255,0.07)",borderRadius:"16px",padding:"1.25rem",marginBottom:"1.5rem"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"}}>
+          <span style={{color:"#fff",fontWeight:600,fontSize:"14px"}}>Activity Heatmap</span>
+          <span style={{fontSize:"12px",color:"#f59e0b",fontWeight:600}}>{streak}🔥 day streak</span>
+        </div>
+        <div style={{display:"flex",gap:"3px",overflowX:"auto",paddingBottom:"4px"}}>
+          {weeks.map((week,wi) => (
+            <div key={wi} style={{display:"flex",flexDirection:"column",gap:"3px"}}>
+              {week.map(d => (
+                <div key={d} title={`${d}: ${actMap[d]||0} problems`}
+                  style={{width:"10px",height:"10px",borderRadius:"2px",background:getColor(d),border:d===today?"1px solid #6366f1":"none",flexShrink:0}}/>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:"6px",marginTop:"8px"}}>
+          <span style={{fontSize:"10px",color:"#475569"}}>Less</span>
+          {["rgba(255,255,255,0.05)","rgba(99,102,241,0.3)","rgba(99,102,241,0.6)","#6366f1"].map((c,i)=>(
+            <div key={i} style={{width:"10px",height:"10px",borderRadius:"2px",background:c}}/>
+          ))}
+          <span style={{fontSize:"10px",color:"#475569"}}>More</span>
+        </div>
+      </div>
+    );
   };
 
   if(page==="home") return (
@@ -272,9 +385,7 @@ export default function App() {
       <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at 20% 50%, rgba(99,102,241,0.15) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(139,92,246,0.1) 0%, transparent 60%)"}}/>
       <div style={{position:"relative",zIndex:1,textAlign:"center",marginBottom:"3rem"}}>
         <div style={{fontSize:"13px",letterSpacing:"3px",color:"#6366f1",fontWeight:600,marginBottom:"1rem",textTransform:"uppercase"}}>A2Z DSA Tracker</div>
-        <h1 style={{fontSize:"clamp(2rem,5vw,3.5rem)",fontWeight:800,color:"#fff",lineHeight:1.1,marginBottom:"1rem"}}>
-          {GROUP_NAME}
-        </h1>
+        <h1 style={{fontSize:"clamp(2rem,5vw,3.5rem)",fontWeight:800,color:"#fff",lineHeight:1.1,marginBottom:"1rem"}}>{GROUP_NAME}</h1>
         <p style={{color:"#94a3b8",fontSize:"16px",maxWidth:"420px",margin:"0 auto"}}>Track your DSA journey together. Compete, collaborate, conquer.</p>
       </div>
       <div style={{display:"flex",gap:"1rem",flexWrap:"wrap",justifyContent:"center",position:"relative",zIndex:1}}>
@@ -300,48 +411,37 @@ export default function App() {
         <h2 style={{color:"#fff",fontSize:"22px",fontWeight:700,marginBottom:"0.25rem"}}>Join the group</h2>
         <p style={{color:"#64748b",fontSize:"13px",marginBottom:"1.5rem"}}>Register with your group code</p>
         {authError && <div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:"10px",padding:"10px 14px",color:"#ef4444",fontSize:"13px",marginBottom:"1rem"}}>{authError}</div>}
-
         <div style={{marginBottom:"1rem"}}>
           <label style={{fontSize:"11px",color:"#64748b",fontWeight:600,letterSpacing:"1px",display:"block",marginBottom:"6px"}}>REAL NAAM</label>
           <div style={{position:"relative"}}>
             <span style={{position:"absolute",left:"12px",top:"50%",transform:"translateY(-50%)",fontSize:"16px"}}>👤</span>
-            <input value={regName} onChange={e=>setRegName(e.target.value)} type="text" placeholder="Jaise: Rahul Sharma" maxLength={50}
-              style={{width:"100%",padding:"12px 12px 12px 40px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"10px",color:"#fff",fontSize:"14px",outline:"none"}}/>
+            <input value={regName} onChange={e=>setRegName(e.target.value)} type="text" placeholder="Jaise: Rahul Sharma" maxLength={50} style={{width:"100%",padding:"12px 12px 12px 40px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"10px",color:"#fff",fontSize:"14px",outline:"none"}}/>
           </div>
         </div>
-
         <div style={{marginBottom:"1rem"}}>
-          <label style={{fontSize:"11px",color:"#64748b",fontWeight:600,letterSpacing:"1px",display:"block",marginBottom:"6px"}}>FARZI NAAM <span style={{color:"#475569",fontWeight:400}}>(username • small letters + numbers only)</span></label>
+          <label style={{fontSize:"11px",color:"#64748b",fontWeight:600,letterSpacing:"1px",display:"block",marginBottom:"6px"}}>FARZI NAAM <span style={{color:"#475569",fontWeight:400}}>(username)</span></label>
           <div style={{position:"relative"}}>
             <span style={{position:"absolute",left:"12px",top:"50%",transform:"translateY(-50%)",fontSize:"16px"}}>😎</span>
-            <input value={regFarziName} onChange={e=>setRegFarziName(e.target.value.toLowerCase().replace(/[^a-z0-9]/g,""))} type="text" placeholder="Jaise: darkcoderr99" maxLength={20}
-              style={{width:"100%",padding:"12px 12px 12px 40px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"10px",color:"#fff",fontSize:"14px",outline:"none"}}/>
+            <input value={regFarziName} onChange={e=>setRegFarziName(e.target.value.toLowerCase().replace(/[^a-z0-9]/g,""))} type="text" placeholder="Jaise: darkcoderr99" maxLength={20} style={{width:"100%",padding:"12px 12px 12px 40px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"10px",color:"#fff",fontSize:"14px",outline:"none"}}/>
           </div>
-          <div style={{fontSize:"11px",color:"#475569",marginTop:"4px",paddingLeft:"4px"}}>Yahi login ke time poochha jaayega</div>
         </div>
-
         <div style={{marginBottom:"1rem"}}>
           <label style={{fontSize:"11px",color:"#64748b",fontWeight:600,letterSpacing:"1px",display:"block",marginBottom:"6px"}}>GROUP CODE</label>
           <div style={{position:"relative"}}>
             <span style={{position:"absolute",left:"12px",top:"50%",transform:"translateY(-50%)",fontSize:"16px"}}>🔑</span>
-            <input value={regCode} onChange={e=>setRegCode(e.target.value)} type="text" placeholder="Group join code"
-              style={{width:"100%",padding:"12px 12px 12px 40px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"10px",color:"#fff",fontSize:"14px",outline:"none"}}/>
+            <input value={regCode} onChange={e=>setRegCode(e.target.value)} type="text" placeholder="Group join code" style={{width:"100%",padding:"12px 12px 12px 40px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"10px",color:"#fff",fontSize:"14px",outline:"none"}}/>
           </div>
         </div>
-
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"1rem"}}>
           <div>
             <label style={{fontSize:"11px",color:"#64748b",fontWeight:600,letterSpacing:"1px",display:"block",marginBottom:"6px"}}>4-DIGIT PIN</label>
-            <input value={regPin} onChange={e=>setRegPin(e.target.value)} type="password" placeholder="••••" maxLength={4}
-              style={{width:"100%",padding:"12px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"10px",color:"#fff",fontSize:"14px",outline:"none",textAlign:"center",letterSpacing:"6px"}}/>
+            <input value={regPin} onChange={e=>setRegPin(e.target.value)} type="password" placeholder="••••" maxLength={4} style={{width:"100%",padding:"12px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"10px",color:"#fff",fontSize:"14px",outline:"none",textAlign:"center",letterSpacing:"6px"}}/>
           </div>
           <div>
             <label style={{fontSize:"11px",color:"#64748b",fontWeight:600,letterSpacing:"1px",display:"block",marginBottom:"6px"}}>CONFIRM PIN</label>
-            <input value={regConfirm} onChange={e=>setRegConfirm(e.target.value)} type="password" placeholder="••••" maxLength={4}
-              style={{width:"100%",padding:"12px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"10px",color:"#fff",fontSize:"14px",outline:"none",textAlign:"center",letterSpacing:"6px"}}/>
+            <input value={regConfirm} onChange={e=>setRegConfirm(e.target.value)} type="password" placeholder="••••" maxLength={4} style={{width:"100%",padding:"12px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"10px",color:"#fff",fontSize:"14px",outline:"none",textAlign:"center",letterSpacing:"6px"}}/>
           </div>
         </div>
-
         <button onClick={handleRegister} style={{width:"100%",padding:"13px",background:"#6366f1",border:"none",borderRadius:"12px",color:"#fff",fontSize:"15px",fontWeight:600,cursor:"pointer",marginTop:"0.5rem"}}>Register 🚀</button>
         <p style={{color:"#64748b",fontSize:"13px",textAlign:"center",marginTop:"1rem"}}>Already registered? <span onClick={()=>setPage("login")} style={{color:"#6366f1",cursor:"pointer"}}>Login karo</span></p>
       </div>
@@ -360,7 +460,7 @@ export default function App() {
           <div style={{background:"rgba(99,102,241,0.08)",border:"1px solid rgba(99,102,241,0.25)",borderRadius:"14px",padding:"1.25rem",textAlign:"center",marginBottom:"1rem"}}>
             <div style={{fontSize:"28px",marginBottom:"8px"}}>😎</div>
             <div style={{color:"#fff",fontWeight:700,fontSize:"15px",marginBottom:"6px"}}>Contact Website Admin</div>
-            <div style={{color:"#64748b",fontSize:"12px",lineHeight:1.6}}>Bhai PIN bhool gaye? Admin se baat karo, wahi reset karega. Hum kuch nahi kar sakte 🤷</div>
+            <div style={{color:"#64748b",fontSize:"12px",lineHeight:1.6}}>Bhai PIN bhool gaye? Admin se baat karo, wahi reset karega.</div>
             <button onClick={()=>setShowForgotPin(false)} style={{marginTop:"12px",background:"none",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"8px",padding:"6px 16px",color:"#64748b",fontSize:"12px",cursor:"pointer"}}>Wapas jao</button>
           </div>
         ) : (
@@ -385,16 +485,18 @@ export default function App() {
   if(page!=="app"||!currentUser) return null;
 
   const lb = getLeaderboard();
+  const wlb = getWeeklyLeaderboard();
   const myKey = currentUser.username || currentUser.name.toLowerCase();
   const myRank = lb.findIndex(u=>(u.username||u.name.toLowerCase())===myKey)+1;
-  const myData = lb.find(u=>(u.username||u.name.toLowerCase())===myKey)||{solved:0,points:0,streak:0,pct:0};
+  const myWeeklyRank = wlb.findIndex(u=>(u.username||u.name.toLowerCase())===myKey)+1;
+  const myData = lb.find(u=>(u.username||u.name.toLowerCase())===myKey)||{solvedCount:0,points:0,streak:0,pct:0};
   const totalSolved = getSolvedCount(currentUser);
   const myStreak = getStreak(currentUser);
 
   const tabs = [
-    {id:"dashboard",label:"Dashboard",icon:"🏠"},
+    {id:"dashboard",label:"Home",icon:"🏠"},
     {id:"problems",label:"Problems",icon:"📝"},
-    {id:"leaderboard",label:"Leaderboard",icon:"🏆"},
+    {id:"leaderboard",label:"Ranks",icon:"🏆"},
     {id:"compare",label:"Compare",icon:"⚔️"},
     ...(currentUser.isAdmin ? [{id:"admin",label:"Admin",icon:"🔐"}] : [{id:"more",label:"More",icon:"🔗"}]),
   ];
@@ -420,6 +522,7 @@ export default function App() {
       </div>
 
       <div style={{padding:"1.5rem",maxWidth:"800px",margin:"0 auto"}}>
+
         {activeTab==="dashboard" && (
           <div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:"12px",marginBottom:"1.5rem"}}>
@@ -451,6 +554,9 @@ export default function App() {
               </div>
             </div>
 
+            {/* Activity Heatmap */}
+            <HeatMap u={currentUser} />
+
             <div style={{background:"#1a1a2e",border:"1px solid rgba(255,255,255,0.07)",borderRadius:"16px",padding:"1.25rem",marginBottom:"1.5rem"}}>
               <div style={{color:"#fff",fontWeight:600,fontSize:"14px",marginBottom:"12px"}}>Topic Progress</div>
               {DSA_TOPICS.map(t=>{
@@ -473,11 +579,11 @@ export default function App() {
             <div style={{background:"#1a1a2e",border:"1px solid rgba(255,255,255,0.07)",borderRadius:"16px",padding:"1.25rem"}}>
               <div style={{color:"#fff",fontWeight:600,fontSize:"14px",marginBottom:"12px"}}>Top 3 in Group</div>
               {lb.slice(0,3).map((u,i)=>(
-                <div key={u.name} style={{display:"flex",alignItems:"center",gap:"12px",padding:"8px 0",borderBottom:i<2?"1px solid rgba(255,255,255,0.05)":"none"}}>
+                <div key={u.username||u.name} style={{display:"flex",alignItems:"center",gap:"12px",padding:"8px 0",borderBottom:i<2?"1px solid rgba(255,255,255,0.05)":"none"}}>
                   <div style={{width:"28px",height:"28px",borderRadius:"50%",background:i===0?"#f59e0b":i===1?"#94a3b8":"#cd7c2f",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",fontWeight:800,color:"#fff"}}>{i+1}</div>
                   <div style={{flex:1}}>
                     <div style={{fontSize:"13px",color:"#fff",fontWeight:600}}>{u.name}</div>
-                    <div style={{fontSize:"11px",color:"#64748b"}}>{u.solved} solved · {u.streak}🔥</div>
+                    <div style={{fontSize:"11px",color:"#64748b"}}>{u.solvedCount} solved · {u.streak}🔥</div>
                   </div>
                   <div style={{fontSize:"13px",color:"#6366f1",fontWeight:700}}>{u.points}pts</div>
                 </div>
@@ -498,7 +604,6 @@ export default function App() {
                 ))}
               </div>
             </div>
-
             {DSA_TOPICS.map(topic=>{
               const filtered = topic.problems.filter(p=>{
                 const matchDiff = diffFilter==="all"||p.diff===diffFilter;
@@ -542,38 +647,51 @@ export default function App() {
 
         {activeTab==="leaderboard" && (
           <div>
-            <div style={{color:"#fff",fontSize:"18px",fontWeight:700,marginBottom:"1.25rem"}}>🏆 Leaderboard</div>
-            {lb.map((u,i)=>{
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
+              <div style={{color:"#fff",fontSize:"18px",fontWeight:700}}>
+                {lbTab==="overall" ? "🏆 Overall Ranks" : "📅 This Week"}
+              </div>
+              <div style={{display:"flex",gap:"6px",background:"rgba(255,255,255,0.05)",borderRadius:"12px",padding:"4px"}}>
+                <button onClick={()=>setLbTab("overall")} style={{padding:"5px 14px",borderRadius:"9px",border:"none",fontSize:"12px",fontWeight:600,cursor:"pointer",background:lbTab==="overall"?"#6366f1":"transparent",color:lbTab==="overall"?"#fff":"#64748b"}}>Overall</button>
+                <button onClick={()=>setLbTab("weekly")} style={{padding:"5px 14px",borderRadius:"9px",border:"none",fontSize:"12px",fontWeight:600,cursor:"pointer",background:lbTab==="weekly"?"#6366f1":"transparent",color:lbTab==="weekly"?"#fff":"#64748b"}}>This Week</button>
+              </div>
+            </div>
+
+            {lbTab==="weekly" && (
+              <div style={{background:"rgba(99,102,241,0.08)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:"12px",padding:"10px 14px",marginBottom:"1rem",fontSize:"12px",color:"#818cf8"}}>
+                📅 Sirf is hafte (Mon–Sun) ke solved problems count ho rahe hain
+              </div>
+            )}
+
+            {(lbTab==="overall" ? lb : wlb).map((u,i)=>{
               const isMe = (u.username||u.name.toLowerCase())===myKey;
-              const isTop1 = i===0;
-              const isTop2 = i===1;
-              const isTop3 = i===2;
-              const isTop = isTop1||isTop2||isTop3;
-              const topBg = isTop1?"linear-gradient(135deg,rgba(245,158,11,0.18),rgba(245,158,11,0.05))":isTop2?"linear-gradient(135deg,rgba(148,163,184,0.18),rgba(148,163,184,0.05))":isTop3?"linear-gradient(135deg,rgba(205,124,47,0.18),rgba(205,124,47,0.05))":"#1a1a2e";
-              const topBorder = isTop1?"rgba(245,158,11,0.5)":isTop2?"rgba(148,163,184,0.4)":isTop3?"rgba(205,124,47,0.4)":isMe?"rgba(99,102,241,0.4)":"rgba(255,255,255,0.07)";
-              const medal = isTop1?"🥇":isTop2?"🥈":isTop3?"🥉":null;
+              const medal = i===0?"🥇":i===1?"🥈":i===2?"🥉":null;
+              const isTop = i<3;
+              const topBg = i===0?"linear-gradient(135deg,rgba(245,158,11,0.18),rgba(245,158,11,0.05))":i===1?"linear-gradient(135deg,rgba(148,163,184,0.18),rgba(148,163,184,0.05))":i===2?"linear-gradient(135deg,rgba(205,124,47,0.18),rgba(205,124,47,0.05))":"#1a1a2e";
+              const topBorder = i===0?"rgba(245,158,11,0.5)":i===1?"rgba(148,163,184,0.4)":i===2?"rgba(205,124,47,0.4)":isMe?"rgba(99,102,241,0.4)":"rgba(255,255,255,0.07)";
+              const pts = lbTab==="overall" ? u.points : u.weeklyPoints;
+              const solved = lbTab==="overall" ? u.solvedCount : u.weeklySolved;
               return (
-                <div key={u.username||u.name} style={{background:isTop?topBg:isMe?"rgba(99,102,241,0.15)":"#1a1a2e",border:`${isTop?"1.5px":"1px"} solid ${topBorder}`,borderRadius:"14px",padding:isTop?"16px 16px":"14px 16px",marginBottom:"10px",display:"flex",alignItems:"center",gap:"14px",position:"relative",overflow:"hidden"}}>
-                  {isTop && <div style={{position:"absolute",top:0,left:0,right:0,height:"2px",background:isTop1?"linear-gradient(90deg,#f59e0b,transparent)":isTop2?"linear-gradient(90deg,#94a3b8,transparent)":"linear-gradient(90deg,#cd7c2f,transparent)"}}/>}
-                  <div style={{width:"36px",height:"36px",borderRadius:"50%",background:isTop1?"rgba(245,158,11,0.2)":isTop2?"rgba(148,163,184,0.2)":isTop3?"rgba(205,124,47,0.2)":"rgba(255,255,255,0.05)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:isTop?"18px":"14px",fontWeight:800,color:isTop1?"#f59e0b":isTop2?"#94a3b8":isTop3?"#cd7c2f":"#475569",flexShrink:0}}>
+                <div key={u.username||u.name} style={{background:isTop?topBg:isMe?"rgba(99,102,241,0.15)":"#1a1a2e",border:`${isTop?"1.5px":"1px"} solid ${topBorder}`,borderRadius:"14px",padding:"14px 16px",marginBottom:"10px",display:"flex",alignItems:"center",gap:"14px",position:"relative",overflow:"hidden"}}>
+                  {isTop && <div style={{position:"absolute",top:0,left:0,right:0,height:"2px",background:i===0?"linear-gradient(90deg,#f59e0b,transparent)":i===1?"linear-gradient(90deg,#94a3b8,transparent)":"linear-gradient(90deg,#cd7c2f,transparent)"}}/>}
+                  <div style={{width:"36px",height:"36px",borderRadius:"50%",background:i===0?"rgba(245,158,11,0.2)":i===1?"rgba(148,163,184,0.2)":i===2?"rgba(205,124,47,0.2)":"rgba(255,255,255,0.05)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:isTop?"18px":"14px",fontWeight:800,color:i===0?"#f59e0b":i===1?"#94a3b8":i===2?"#cd7c2f":"#475569",flexShrink:0}}>
                     {medal || (i+1)}
                   </div>
                   <div style={{flex:1}}>
                     <div style={{display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
-                      <span style={{color:isTop?"#fff":"#e2e8f0",fontWeight:isTop?700:600,fontSize:isTop?"15px":"14px"}}>{u.username||u.name}</span>
-                      {u.name && u.username && <span style={{fontSize:"10px",color:"#475569"}}>({u.name})</span>}
-                      {isMe && <span style={{fontSize:"10px",background:"rgba(99,102,241,0.3)",color:"#818cf8",padding:"1px 8px",borderRadius:"20px"}}>You</span>}
+                      <span style={{color:"#fff",fontWeight:isTop?700:600,fontSize:isTop?"15px":"14px"}}>{u.username||u.name}</span>
+                      {u.name&&u.username&&<span style={{fontSize:"10px",color:"#475569"}}>({u.name})</span>}
+                      {isMe&&<span style={{fontSize:"10px",background:"rgba(99,102,241,0.3)",color:"#818cf8",padding:"1px 8px",borderRadius:"20px"}}>You</span>}
                     </div>
-                    <div style={{fontSize:"11px",color:"#64748b",marginTop:"2px"}}>{rankFor(u.pct)} · {u.streak}🔥 streak</div>
+                    <div style={{fontSize:"11px",color:"#64748b",marginTop:"2px"}}>{rankFor(u.pct)} · {u.streak}🔥</div>
                   </div>
                   <div style={{textAlign:"right"}}>
-                    <div style={{color:isTop1?"#f59e0b":isTop2?"#94a3b8":isTop3?"#cd7c2f":"#6366f1",fontWeight:800,fontSize:isTop?"18px":"16px"}}>{u.points}</div>
-                    <div style={{fontSize:"11px",color:"#475569"}}>{u.solved} solved</div>
+                    <div style={{color:i===0?"#f59e0b":i===1?"#94a3b8":i===2?"#cd7c2f":"#6366f1",fontWeight:800,fontSize:isTop?"18px":"16px"}}>{pts}pts</div>
+                    <div style={{fontSize:"11px",color:"#475569"}}>{solved} solved</div>
                   </div>
                 </div>
               );
             })}
-            {lb.length===0 && <div style={{color:"#475569",textAlign:"center",padding:"2rem"}}>Abhi koi registered nahi hai</div>}
           </div>
         )}
 
@@ -581,9 +699,9 @@ export default function App() {
           <div>
             <div style={{color:"#fff",fontSize:"18px",fontWeight:700,marginBottom:"1.25rem"}}>⚔️ Compare</div>
             <select value={compareUser} onChange={e=>setCompareUser(e.target.value)} style={{width:"100%",padding:"10px 14px",background:"#1a1a2e",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"12px",color:"#fff",fontSize:"14px",outline:"none",marginBottom:"1.5rem"}}>
-              <option value="">Ye kya kar raha 🧐</option>
+              <option value="">Dost select karo...</option>
               {Object.values(users).filter(u=>(u.username||u.name.toLowerCase())!==myKey).map(u=>(
-                <option key={u.username||u.name} value={u.username||u.name.toLowerCase()}>{u.username||u.name} {u.username&&u.name?`(${u.name})`:""}</option>
+                <option key={u.username||u.name} value={u.username||u.name.toLowerCase()}>{u.username||u.name}{u.username&&u.name?` (${u.name})`:""}</option>
               ))}
             </select>
 
@@ -616,10 +734,9 @@ export default function App() {
                     {label:"Points",my:myPts,their:theirPts},
                     {label:"Streak 🔥",my:myStr,their:theirStr},
                   ].map(row=>{
-                    const total = (row.my+row.their)||1;
-                    const myPct = Math.round(row.my/total*100);
-                    const theirPct = 100-myPct;
-                    const iWin = row.my>row.their;
+                    const total=(row.my+row.their)||1;
+                    const myPct=Math.round(row.my/total*100);
+                    const iWin=row.my>row.their;
                     return (
                       <div key={row.label} style={{background:"#1a1a2e",border:"1px solid rgba(255,255,255,0.07)",borderRadius:"14px",padding:"14px",marginBottom:"10px"}}>
                         <div style={{display:"flex",justifyContent:"space-between",marginBottom:"8px"}}>
@@ -629,33 +746,44 @@ export default function App() {
                         </div>
                         <div style={{display:"flex",borderRadius:"999px",height:"8px",overflow:"hidden",gap:"2px"}}>
                           <div style={{width:`${myPct}%`,background:"#6366f1",borderRadius:"999px 0 0 999px"}}/>
-                          <div style={{width:`${theirPct}%`,background:"#475569",borderRadius:"0 999px 999px 0"}}/>
+                          <div style={{width:`${100-myPct}%`,background:"#475569",borderRadius:"0 999px 999px 0"}}/>
                         </div>
                       </div>
                     );
                   })}
 
+                  {/* Topic-wise comparison with green/red */}
                   <div style={{background:"#1a1a2e",border:"1px solid rgba(255,255,255,0.07)",borderRadius:"14px",padding:"14px"}}>
                     <div style={{color:"#fff",fontWeight:600,fontSize:"13px",marginBottom:"12px"}}>Topic-wise Comparison</div>
                     {DSA_TOPICS.map(t=>{
-                      const myD = getTopicProgress(me,t.id);
-                      const thD = getTopicProgress(them,t.id);
+                      const myD = getTopicProgress(me, t.id);
+                      const thD = getTopicProgress(them, t.id);
+                      const iAhead = myD > thD;
+                      const theyAhead = thD > myD;
+                      const tied = myD === thD;
                       return (
-                        <div key={t.id} style={{marginBottom:"8px"}}>
-                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:"3px"}}>
-                            <span style={{fontSize:"11px",color:"#94a3b8"}}>{t.name}</span>
-                            <span style={{fontSize:"11px",color:"#64748b"}}>{myD} vs {thD}</span>
+                        <div key={t.id} style={{marginBottom:"10px",background:"rgba(255,255,255,0.02)",borderRadius:"10px",padding:"8px 10px"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"5px"}}>
+                            <span style={{fontSize:"11px",color:"#94a3b8",flex:1}}>{t.name}</span>
+                            <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                              <span style={{fontSize:"12px",fontWeight:700,color:iAhead?"#22c55e":theyAhead?"#ef4444":"#64748b"}}>{myD}</span>
+                              <span style={{fontSize:"10px",color:"#475569"}}>vs</span>
+                              <span style={{fontSize:"12px",fontWeight:700,color:theyAhead?"#22c55e":iAhead?"#ef4444":"#64748b"}}>{thD}</span>
+                              <span style={{fontSize:"12px"}}>{iAhead?"🟢":theyAhead?"🔴":"⚪"}</span>
+                            </div>
                           </div>
-                          <div style={{display:"flex",gap:"2px",height:"5px"}}>
-                            <div style={{flex:myD||0.1,background:"#6366f1",borderRadius:"999px"}}/>
-                            <div style={{flex:thD||0.1,background:"#475569",borderRadius:"999px"}}/>
+                          <div style={{display:"flex",gap:"2px",height:"4px",borderRadius:"999px",overflow:"hidden"}}>
+                            <div style={{flex:myD||0.1,background:iAhead?"#22c55e":theyAhead?"#ef4444":"#6366f1",borderRadius:"999px"}}/>
+                            <div style={{flex:thD||0.1,background:theyAhead?"#22c55e":iAhead?"#ef4444":"#475569",borderRadius:"999px"}}/>
                           </div>
                         </div>
                       );
                     })}
                     <div style={{display:"flex",gap:"16px",marginTop:"10px"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div style={{width:"10px",height:"10px",background:"#6366f1",borderRadius:"2px"}}/><span style={{fontSize:"11px",color:"#64748b"}}>You ({me.username||me.name.split(" ")[0]})</span></div>
+                      <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div style={{width:"10px",height:"10px",background:"#6366f1",borderRadius:"2px"}}/><span style={{fontSize:"11px",color:"#64748b"}}>You</span></div>
                       <div style={{display:"flex",alignItems:"center",gap:"6px"}}><div style={{width:"10px",height:"10px",background:"#475569",borderRadius:"2px"}}/><span style={{fontSize:"11px",color:"#64748b"}}>{them.username||them.name.split(" ")[0]}</span></div>
+                      <div style={{display:"flex",alignItems:"center",gap:"4px"}}><span style={{fontSize:"12px"}}>🟢</span><span style={{fontSize:"11px",color:"#64748b"}}>Tu aage</span></div>
+                      <div style={{display:"flex",alignItems:"center",gap:"4px"}}><span style={{fontSize:"12px"}}>🔴</span><span style={{fontSize:"11px",color:"#64748b"}}>Woh aage</span></div>
                     </div>
                   </div>
                 </div>
@@ -668,8 +796,6 @@ export default function App() {
           <div>
             <div style={{color:"#fff",fontSize:"18px",fontWeight:700,marginBottom:"4px"}}>🔐 Admin Panel</div>
             <div style={{color:"#64748b",fontSize:"12px",marginBottom:"1.25rem"}}>Sabka data yahan hai — responsibly use karo 🙏</div>
-
-            {/* User list */}
             {Object.values(users).map(u => {
               const uKey = u.username || u.name.toLowerCase();
               const isExpanded = adminSelectedUser === uKey;
@@ -677,38 +803,28 @@ export default function App() {
               const pts = getPoints(u);
               return (
                 <div key={uKey} style={{background:"#1a1a2e",border:`1px solid ${isExpanded?"rgba(99,102,241,0.4)":"rgba(255,255,255,0.07)"}`,borderRadius:"14px",marginBottom:"10px",overflow:"hidden"}}>
-                  {/* User row header */}
-                  <div onClick={()=>{setAdminSelectedUser(isExpanded?null:uKey);setAdminEditPin("");setAdminExpandTopic(null);}}
-                    style={{padding:"12px 16px",display:"flex",alignItems:"center",gap:"12px",cursor:"pointer"}}>
+                  <div onClick={()=>{setAdminSelectedUser(isExpanded?null:uKey);setAdminEditPin("");setAdminExpandTopic(null);}} style={{padding:"12px 16px",display:"flex",alignItems:"center",gap:"12px",cursor:"pointer"}}>
                     <div style={{width:"36px",height:"36px",borderRadius:"50%",background:u.isAdmin?"rgba(239,68,68,0.2)":"rgba(99,102,241,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"14px",flexShrink:0}}>
                       {u.isAdmin?"🔐":"👤"}
                     </div>
                     <div style={{flex:1}}>
                       <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
                         <span style={{color:"#fff",fontWeight:600,fontSize:"14px"}}>{u.username||u.name}</span>
-                        {u.name && u.username && <span style={{fontSize:"10px",color:"#475569"}}>({u.name})</span>}
-                        {u.isAdmin && <span style={{fontSize:"10px",background:"rgba(239,68,68,0.2)",color:"#ef4444",padding:"1px 7px",borderRadius:"20px"}}>Admin</span>}
-                        {u.hidden && <span style={{fontSize:"10px",background:"rgba(255,255,255,0.07)",color:"#64748b",padding:"1px 7px",borderRadius:"20px"}}>Hidden</span>}
+                        {u.name&&u.username&&<span style={{fontSize:"10px",color:"#475569"}}>({u.name})</span>}
+                        {u.isAdmin&&<span style={{fontSize:"10px",background:"rgba(239,68,68,0.2)",color:"#ef4444",padding:"1px 7px",borderRadius:"20px"}}>Admin</span>}
+                        {u.hidden&&<span style={{fontSize:"10px",background:"rgba(255,255,255,0.07)",color:"#64748b",padding:"1px 7px",borderRadius:"20px"}}>Hidden</span>}
                       </div>
                       <div style={{fontSize:"11px",color:"#64748b",marginTop:"2px"}}>{solvedCount} solved · {pts} pts · PIN: {u.pin}</div>
                     </div>
                     <span style={{color:"#475569",fontSize:"14px"}}>{isExpanded?"▲":"▼"}</span>
                   </div>
-
-                  {/* Expanded admin actions */}
                   {isExpanded && (
                     <div style={{borderTop:"1px solid rgba(255,255,255,0.07)",padding:"14px 16px",display:"flex",flexDirection:"column",gap:"12px"}}>
-
-                      {/* Reset PIN */}
                       <div style={{background:"rgba(255,255,255,0.03)",borderRadius:"12px",padding:"12px"}}>
                         <div style={{color:"#94a3b8",fontSize:"12px",fontWeight:600,marginBottom:"8px"}}>🔑 PIN Reset</div>
                         <div style={{display:"flex",gap:"8px"}}>
-                          <input
-                            value={adminEditPin}
-                            onChange={e=>setAdminEditPin(e.target.value.replace(/\D/g,"").slice(0,4))}
-                            type="password" placeholder="Naya PIN (4 digits)" maxLength={4}
-                            style={{flex:1,padding:"9px 12px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"9px",color:"#fff",fontSize:"13px",outline:"none",textAlign:"center",letterSpacing:"4px"}}
-                          />
+                          <input value={adminEditPin} onChange={e=>setAdminEditPin(e.target.value.replace(/\D/g,"").slice(0,4))} type="password" placeholder="Naya PIN (4 digits)" maxLength={4}
+                            style={{flex:1,padding:"9px 12px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"9px",color:"#fff",fontSize:"13px",outline:"none",textAlign:"center",letterSpacing:"4px"}}/>
                           <button onClick={async()=>{
                             if(adminEditPin.length!==4||!/^\d{4}$/.test(adminEditPin)){showToast("4 digit PIN daalo","error");return;}
                             const updated={...users[uKey],pin:adminEditPin};
@@ -718,8 +834,6 @@ export default function App() {
                           }} style={{padding:"9px 16px",background:"#6366f1",border:"none",borderRadius:"9px",color:"#fff",fontSize:"12px",fontWeight:600,cursor:"pointer"}}>Reset</button>
                         </div>
                       </div>
-
-                      {/* Hide/Unhide from leaderboard */}
                       <div style={{display:"flex",gap:"8px"}}>
                         <button onClick={async()=>{
                           const updated={...users[uKey],hidden:!u.hidden};
@@ -728,10 +842,8 @@ export default function App() {
                         }} style={{flex:1,padding:"9px",background:u.hidden?"rgba(34,197,94,0.1)":"rgba(255,255,255,0.05)",border:`1px solid ${u.hidden?"rgba(34,197,94,0.3)":"rgba(255,255,255,0.1)"}`,borderRadius:"9px",color:u.hidden?"#22c55e":"#64748b",fontSize:"12px",fontWeight:600,cursor:"pointer"}}>
                           {u.hidden?"👁️ Leaderboard pe dikhao":"🙈 Leaderboard se chhupaao"}
                         </button>
-
-                        {/* Delete user */}
-                        {uKey !== myKey && (
-                          confirmDeleteUser === uKey ? (
+                        {uKey!==myKey && (
+                          confirmDeleteUser===uKey ? (
                             <div style={{display:"flex",gap:"6px"}}>
                               <button onClick={async()=>{
                                 const newU={...users};
@@ -740,31 +852,22 @@ export default function App() {
                                 setAdminSelectedUser(null);
                                 setConfirmDeleteUser(null);
                                 showToast(`${uKey} delete ho gaya 🗑️`);
-                              }} style={{padding:"9px 14px",background:"#ef4444",border:"none",borderRadius:"9px",color:"#fff",fontSize:"12px",fontWeight:600,cursor:"pointer"}}>
-                                Haan, delete karo
-                              </button>
-                              <button onClick={()=>setConfirmDeleteUser(null)} style={{padding:"9px 12px",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"9px",color:"#94a3b8",fontSize:"12px",cursor:"pointer"}}>
-                                Nahi
-                              </button>
+                              }} style={{padding:"9px 14px",background:"#ef4444",border:"none",borderRadius:"9px",color:"#fff",fontSize:"12px",fontWeight:600,cursor:"pointer"}}>Haan, delete karo</button>
+                              <button onClick={()=>setConfirmDeleteUser(null)} style={{padding:"9px 12px",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"9px",color:"#94a3b8",fontSize:"12px",cursor:"pointer"}}>Nahi</button>
                             </div>
                           ) : (
-                            <button onClick={()=>setConfirmDeleteUser(uKey)} style={{padding:"9px 14px",background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:"9px",color:"#ef4444",fontSize:"12px",fontWeight:600,cursor:"pointer"}}>
-                              🗑️ Delete
-                            </button>
+                            <button onClick={()=>setConfirmDeleteUser(uKey)} style={{padding:"9px 14px",background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:"9px",color:"#ef4444",fontSize:"12px",fontWeight:600,cursor:"pointer"}}>🗑️ Delete</button>
                           )
                         )}
                       </div>
-
-                      {/* Topic-wise solved progress view/edit */}
                       <div style={{background:"rgba(255,255,255,0.03)",borderRadius:"12px",padding:"12px"}}>
-                        <div style={{color:"#94a3b8",fontSize:"12px",fontWeight:600,marginBottom:"8px"}}>📊 Solved Progress (tap topic to toggle problems)</div>
+                        <div style={{color:"#94a3b8",fontSize:"12px",fontWeight:600,marginBottom:"8px"}}>📊 Progress (tap topic to toggle)</div>
                         {DSA_TOPICS.map(t=>{
-                          const topicDone = getTopicProgress(u, t.id);
-                          const isTopExpanded = adminExpandTopic === (uKey+"_"+t.id);
+                          const topicDone=getTopicProgress(u,t.id);
+                          const isTopExpanded=adminExpandTopic===(uKey+"_"+t.id);
                           return (
                             <div key={t.id} style={{marginBottom:"4px"}}>
-                              <div onClick={()=>setAdminExpandTopic(isTopExpanded?null:(uKey+"_"+t.id))}
-                                style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 8px",borderRadius:"8px",cursor:"pointer",background:isTopExpanded?"rgba(99,102,241,0.1)":"transparent"}}>
+                              <div onClick={()=>setAdminExpandTopic(isTopExpanded?null:(uKey+"_"+t.id))} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 8px",borderRadius:"8px",cursor:"pointer",background:isTopExpanded?"rgba(99,102,241,0.1)":"transparent"}}>
                                 <span style={{fontSize:"12px",color:"#e2e8f0"}}>{t.name}</span>
                                 <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
                                   <span style={{fontSize:"11px",color:"#64748b"}}>{topicDone}/{t.problems.length}</span>
@@ -774,7 +877,7 @@ export default function App() {
                               {isTopExpanded && (
                                 <div style={{padding:"6px 0 6px 8px",display:"flex",flexDirection:"column",gap:"2px"}}>
                                   {t.problems.map(p=>{
-                                    const done = !!(u.solved?.[p.id]);
+                                    const done=!!(u.solved?.[p.id]);
                                     return (
                                       <div key={p.id} onClick={async()=>{
                                         const solved={...(users[uKey].solved||{})};
@@ -797,7 +900,6 @@ export default function App() {
                           );
                         })}
                       </div>
-
                     </div>
                   )}
                 </div>
@@ -824,18 +926,6 @@ export default function App() {
                 </a>
               ))}
             </div>
-
-            <div style={{background:"#1a1a2e",border:"1px solid rgba(255,255,255,0.07)",borderRadius:"16px",overflow:"hidden",marginBottom:"1rem"}}>
-              <div style={{padding:"14px 16px",borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
-                <div style={{color:"#fff",fontWeight:600,fontSize:"13px"}}>CP Tracker</div>
-                <div style={{fontSize:"11px",color:"#f59e0b",marginTop:"2px"}}>🚧 In Construction — Coming soon!</div>
-              </div>
-              <div style={{padding:"14px 16px"}}>
-                <div style={{color:"#fff",fontWeight:600,fontSize:"13px"}}>More Trackers</div>
-                <div style={{fontSize:"11px",color:"#f59e0b",marginTop:"2px"}}>🚧 In Construction — Coming soon!</div>
-              </div>
-            </div>
-
             <div style={{background:"rgba(239,68,68,0.05)",border:"1px solid rgba(239,68,68,0.15)",borderRadius:"16px",padding:"14px 16px"}}>
               <div style={{color:"#ef4444",fontWeight:600,fontSize:"13px",marginBottom:"4px"}}>Logout</div>
               <div style={{color:"#64748b",fontSize:"12px",marginBottom:"12px"}}>Apna progress save rahega</div>
