@@ -564,7 +564,13 @@ export default function App() {
                     <span style={{fontSize:"11px",color:"#475569",background:"rgba(255,255,255,0.05)",padding:"3px 10px",borderRadius:"20px"}}>Daily Challenge</span>
                   </div>
                   <div style={{marginBottom:"12px"}}>
-                    <div style={{color:"#fff",fontSize:"16px",fontWeight:700,marginBottom:"4px"}}>{dp.title}</div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"4px"}}>
+                      <div style={{color:"#fff",fontSize:"16px",fontWeight:700,flex:1}}>{dp.title}</div>
+                      <a href={`https://www.google.com/search?q=striver+${encodeURIComponent(dp.title)}+dsa`} target="_blank" rel="noreferrer"
+                        style={{display:"flex",alignItems:"center",gap:"5px",padding:"5px 12px",background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:"8px",color:"#818cf8",fontSize:"12px",fontWeight:600,textDecoration:"none",flexShrink:0,marginLeft:"10px"}}>
+                        🔗 Solve
+                      </a>
+                    </div>
                     <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
                       <span style={{fontSize:"11px",color:"#64748b"}}>{dp.topicName}</span>
                       <span style={{fontSize:"10px",fontWeight:700,padding:"2px 8px",borderRadius:"20px",background:DIFF_BG[dp.diff],color:COLORS[dp.diff]}}>{dp.diff}</span>
@@ -573,7 +579,7 @@ export default function App() {
                   <button onClick={()=>toggleProblem(dp.id)} style={{width:"100%",padding:"10px",background:alreadySolved?"rgba(34,197,94,0.15)":"#6366f1",border:`1px solid ${alreadySolved?"rgba(34,197,94,0.4)":"transparent"}`,borderRadius:"10px",color:alreadySolved?"#22c55e":"#fff",fontSize:"13px",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}>
                     {alreadySolved ? "✅ Aaj ka problem solve kar liya! 🎉" : "✓ Mark as Solved"}
                   </button>
-                  {!alreadySolved && <div style={{textAlign:"center",marginTop:"8px",fontSize:"11px",color:"#475569"}}>Kal naya problem aayega 🔄</div>}
+                  {!alreadySolved && <div style={{textAlign:"center",marginTop:"8px",fontSize:"11px",color:"#475569"}}>Pehle solve karo, phir mark karo 👆</div>}
                 </div>
               );
             })()}
