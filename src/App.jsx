@@ -178,7 +178,7 @@ export default function App() {
       setCurrentUser(users[savedKey]);
       setPage("app");
     }
-  }, [dbLoading, users]);
+  }, [dbLoading, users, currentUser]);
 
   const showToast = (msg, type="success") => {
     setToast({msg, type});
