@@ -165,18 +165,22 @@ export default function App() {
   const [confirmDeleteUser, setConfirmDeleteUser] = useState(null);
   const [dbLoading, setDbLoading] = useState(true);
   const [lbTab, setLbTab] = useState("overall"); // "overall" | "weekly"
+  const [randDiff, setRandDiff] = useState("any");
+  const [randProblem, setRandProblem] = useState(null);
 
   useEffect(() => {
+    // Instant: show app shell immediately if saved key exists
+    const savedKey = localStorage.getItem("ds_current_user");
+    if(savedKey) setPage("app");
     loadData();
   }, []);
 
-  // Restore session after Firebase data loads
+  // Once Firebase data arrives, hydrate currentUser
   useEffect(() => {
     if(dbLoading) return;
     const savedKey = localStorage.getItem("ds_current_user");
     if(savedKey && users[savedKey] && !currentUser) {
       setCurrentUser(users[savedKey]);
-      setPage("app");
     }
   }, [dbLoading, users, currentUser]);
 
@@ -273,6 +277,14 @@ export default function App() {
     const dateNum = parseInt(todayStr().replace(/-/g,''));
     const idx = dateNum % unsolved.length;
     return unsolved[idx];
+  };
+
+  const getRandomProblem = (u, diff) => {
+    const allProblems = DSA_TOPICS.flatMap(t => t.problems.map(p => ({...p, topicName: t.name})));
+    let pool = allProblems.filter(p => !(u.solved?.[p.id]));
+    if(diff !== "any") pool = pool.filter(p => p.diff === diff);
+    if(pool.length === 0) return null;
+    return pool[Math.floor(Math.random() * pool.length)];
   };
 
 
@@ -527,6 +539,20 @@ export default function App() {
   return (
     <div style={{minHeight:"100vh",background:"#0f0f1a",fontFamily:"'Outfit',sans-serif",paddingBottom:"80px"}}>
       <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+      <style>{`
+        button { transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease !important; }
+        button:hover { transform: scale(1.04) !important; box-shadow: 0 4px 20px rgba(99,102,241,0.25) !important; }
+        button:active { transform: scale(0.97) !important; }
+        a[href]:hover { transform: scale(1.04) !important; opacity: 0.9; }
+        [data-card]:hover { transform: translateY(-2px) !important; box-shadow: 0 8px 30px rgba(0,0,0,0.3) !important; }
+        * { transition: transform 0.15s ease; }
+        #cursor-aura { pointer-events:none; position:fixed; width:300px; height:300px; border-radius:50%; background:radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%); transform:translate(-50%,-50%); z-index:0; transition: left 0.1s ease, top 0.1s ease; }
+      `}</style>
+      <div id="cursor-aura" ref={el => {
+        if(!el) return;
+        const move = (e) => { el.style.left = e.clientX + 'px'; el.style.top = e.clientY + 'px'; };
+        window.addEventListener('mousemove', move);
+      }}/>
       {toast && (
         <div style={{position:"fixed",top:"20px",left:"50%",transform:"translateX(-50%)",background:toast.type==="success"?"#22c55e":"#ef4444",color:"#fff",padding:"10px 20px",borderRadius:"30px",fontSize:"14px",fontWeight:600,zIndex:9999,whiteSpace:"nowrap"}}>
           {toast.msg}
@@ -594,6 +620,60 @@ export default function App() {
                     {alreadySolved ? "✅ Aaj ka problem solve kar liya! 🎉" : "✓ Mark as Solved"}
                   </button>
                   {!alreadySolved && <div style={{textAlign:"center",marginTop:"8px",fontSize:"11px",color:"#475569"}}>Pehle solve karo, phir mark karo 👆</div>}
+                </div>
+              );
+            })()}
+
+            {/* Random Problem Generator */}
+            {(() => {
+              const rp = randProblem;
+              return (
+                <div style={{background:"#1a1a2e",border:"1px solid rgba(255,255,255,0.07)",borderRadius:"16px",padding:"1.25rem",marginBottom:"1.5rem"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                      <span style={{fontSize:"18px"}}>🎲</span>
+                      <span style={{color:"#fff",fontWeight:700,fontSize:"14px"}}>Random Problem</span>
+                    </div>
+                    <div style={{display:"flex",gap:"4px"}}>
+                      {["any","easy","medium","hard"].map(d=>(
+                        <button key={d} onClick={()=>setRandDiff(d)} style={{padding:"3px 8px",borderRadius:"6px",border:"none",fontSize:"10px",fontWeight:600,cursor:"pointer",background:randDiff===d?(d==="easy"?"#22c55e":d==="medium"?"#f59e0b":d==="hard"?"#ef4444":"#6366f1"):"rgba(255,255,255,0.07)",color:randDiff===d?"#fff":"#64748b",transition:"all 0.15s"}}>
+                          {d.charAt(0).toUpperCase()+d.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {rp ? (
+                    <div style={{marginBottom:"12px",padding:"12px",background:"rgba(255,255,255,0.03)",borderRadius:"10px"}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"6px"}}>
+                        <span style={{color:"#fff",fontSize:"14px",fontWeight:700,flex:1}}>{rp.title}</span>
+                        <a href={`https://www.google.com/search?q=striver+${encodeURIComponent(rp.title)}+dsa`} target="_blank" rel="noreferrer"
+                          style={{display:"flex",alignItems:"center",gap:"4px",padding:"4px 10px",background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:"7px",color:"#818cf8",fontSize:"11px",fontWeight:600,textDecoration:"none",flexShrink:0,marginLeft:"8px"}}>
+                          🔗 Solve
+                        </a>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                        <span style={{fontSize:"11px",color:"#64748b"}}>{rp.topicName}</span>
+                        <span style={{fontSize:"10px",fontWeight:700,padding:"2px 7px",borderRadius:"20px",background:DIFF_BG[rp.diff],color:COLORS[rp.diff]}}>{rp.diff}</span>
+                        {isSolved(rp.id) && <span style={{fontSize:"10px",color:"#22c55e"}}>✓ Already solved</span>}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{marginBottom:"12px",padding:"12px",background:"rgba(255,255,255,0.03)",borderRadius:"10px",textAlign:"center",color:"#475569",fontSize:"13px"}}>
+                      Button dabao, problem milegi 👇
+                    </div>
+                  )}
+                  <div style={{display:"flex",gap:"8px"}}>
+                    <button onClick={()=>setRandProblem(getRandomProblem(currentUser, randDiff))}
+                      style={{flex:1,padding:"10px",background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:"10px",color:"#818cf8",fontSize:"13px",fontWeight:700,cursor:"pointer"}}>
+                      🎲 Naya Problem Do
+                    </button>
+                    {rp && !isSolved(rp.id) && (
+                      <button onClick={()=>toggleProblem(rp.id)}
+                        style={{flex:1,padding:"10px",background:"#6366f1",border:"none",borderRadius:"10px",color:"#fff",fontSize:"13px",fontWeight:700,cursor:"pointer"}}>
+                        ✓ Mark Solved
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })()}
