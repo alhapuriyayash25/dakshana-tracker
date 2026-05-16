@@ -167,6 +167,7 @@ export default function App() {
   const [lbTab, setLbTab] = useState("overall"); // "overall" | "weekly"
   const [randDiff, setRandDiff] = useState("any");
   const [randProblem, setRandProblem] = useState(null);
+  const [aiPopupProblem, setAiPopupProblem] = useState(null);
 
   useEffect(() => {
     // Instant: show app shell immediately if saved key exists
@@ -767,12 +768,48 @@ export default function App() {
                   {selectedTopic===topic.id && (
                     <div style={{borderTop:"1px solid rgba(255,255,255,0.05)",padding:"8px"}}>
                       {filtered.map(p=>(
-                        <div key={p.id} onClick={()=>toggleProblem(p.id)} style={{display:"flex",alignItems:"center",gap:"10px",padding:"9px 10px",borderRadius:"10px",cursor:"pointer",background:isSolved(p.id)?"rgba(99,102,241,0.1)":"transparent",marginBottom:"2px"}}>
-                          <div style={{width:"20px",height:"20px",borderRadius:"6px",border:isSolved(p.id)?"none":"1.5px solid rgba(255,255,255,0.15)",background:isSolved(p.id)?"#6366f1":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:"11px",color:"#fff"}}>
-                            {isSolved(p.id)?"✓":""}
+                        <div key={p.id} style={{display:"flex",alignItems:"center",gap:"10px",padding:"9px 10px",borderRadius:"10px",background:isSolved(p.id)?"rgba(99,102,241,0.1)":"transparent",marginBottom:"2px"}}>
+                          <div onClick={()=>toggleProblem(p.id)} style={{display:"flex",alignItems:"center",gap:"10px",flex:1,cursor:"pointer"}}>
+                            <div style={{width:"20px",height:"20px",borderRadius:"6px",border:isSolved(p.id)?"none":"1.5px solid rgba(255,255,255,0.15)",background:isSolved(p.id)?"#6366f1":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:"11px",color:"#fff"}}>
+                              {isSolved(p.id)?"✓":""}
+                            </div>
+                            <span style={{flex:1,fontSize:"13px",color:isSolved(p.id)?"#94a3b8":"#e2e8f0",textDecoration:isSolved(p.id)?"line-through":"none"}}>{p.title}</span>
+                            <span style={{fontSize:"10px",fontWeight:700,padding:"2px 8px",borderRadius:"20px",background:DIFF_BG[p.diff],color:COLORS[p.diff]}}>{p.diff}</span>
                           </div>
-                          <span style={{flex:1,fontSize:"13px",color:isSolved(p.id)?"#94a3b8":"#e2e8f0",textDecoration:isSolved(p.id)?"line-through":"none"}}>{p.title}</span>
-                          <span style={{fontSize:"10px",fontWeight:700,padding:"2px 8px",borderRadius:"20px",background:DIFF_BG[p.diff],color:COLORS[p.diff]}}>{p.diff}</span>
+                          <div style={{position:"relative",flexShrink:0}}>
+                            <button onClick={()=>setAiPopupProblem(aiPopupProblem===p.id?null:p.id)}
+                              style={{padding:"4px 10px",background:"rgba(99,102,241,0.12)",border:"1px solid rgba(99,102,241,0.25)",borderRadius:"7px",color:"#818cf8",fontSize:"11px",fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}
+                              title="Striver paid course hai limited trial runs k saath, you can use AI by putting the question and apni marzi se kitne bhi trial runs de sakte ho, mazedar baat ye hai ki ye leetcode ki tarah tumhare code ko evaluate karega">
+                              🤖 AI se poocho
+                            </button>
+                            {aiPopupProblem===p.id && (
+                              <div style={{position:"absolute",right:0,top:"calc(100% + 6px)",width:"260px",background:"#1a1a2e",border:"1px solid rgba(99,102,241,0.3)",borderRadius:"12px",padding:"14px",zIndex:200,boxShadow:"0 8px 30px rgba(0,0,0,0.4)"}}>
+                                <div style={{fontSize:"12px",color:"#94a3b8",marginBottom:"8px",lineHeight:1.5}}>Prompt copy karo aur AI mein paste karo 👇</div>
+                                <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"8px",padding:"10px",fontSize:"11px",color:"#64748b",fontFamily:"monospace",marginBottom:"10px",lineHeight:1.6}}>
+                                  Act as a coding interviewer. I'll give you DSA problems and my solution. Evaluate like LeetCode. Don't give direct answers, just evaluate.
+                                </div>
+                                <button onClick={()=>{navigator.clipboard.writeText("Act as a coding interviewer. I'll give you DSA problems and my solution. Evaluate like LeetCode. Don't give direct answers, just evaluate.");showToast("Prompt copy ho gaya! ✅");}}
+                                  style={{width:"100%",padding:"8px",background:"#6366f1",border:"none",borderRadius:"8px",color:"#fff",fontSize:"12px",fontWeight:600,cursor:"pointer",marginBottom:"10px"}}>
+                                  📋 Prompt Copy Karo
+                                </button>
+                                <div style={{fontSize:"11px",color:"#475569",marginBottom:"8px"}}>Kisi bhi AI pe jaao:</div>
+                                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"6px"}}>
+                                  {[
+                                    {name:"Claude",url:"https://claude.ai",color:"#d97706"},
+                                    {name:"ChatGPT",url:"https://chatgpt.com",color:"#10a37f"},
+                                    {name:"Gemini",url:"https://gemini.google.com",color:"#4285f4"},
+                                  ].map(ai=>(
+                                    <a key={ai.name} href={ai.url} target="_blank" rel="noreferrer"
+                                      style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",padding:"8px 4px",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"8px",textDecoration:"none"}}>
+                                      <span style={{fontSize:"16px"}}>🤖</span>
+                                      <span style={{fontSize:"11px",color:"#fff",fontWeight:600}}>{ai.name}</span>
+                                    </a>
+                                  ))}
+                                </div>
+                                <button onClick={()=>setAiPopupProblem(null)} style={{width:"100%",marginTop:"8px",padding:"6px",background:"transparent",border:"1px solid rgba(255,255,255,0.08)",borderRadius:"8px",color:"#475569",fontSize:"11px",cursor:"pointer"}}>Band karo</button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
